@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: platform-app
+  labels:
+    app: platform
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 80
+    targetPort: 8080
+    protocol: TCP
+    name: http
+  selector:
+    app: platform
+    tier: backend
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: platform-internal
+  labels:
+    app: platform
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8080
+    targetPort: 8080
+  selector:
+    app: platform
+    tier: backend

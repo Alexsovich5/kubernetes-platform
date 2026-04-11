@@ -1,0 +1,26 @@
+replicaCount: 3
+
+image:
+  repository: acoria/platform-app
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: LoadBalancer
+  port: 80
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+monitoring:
+  enabled: true
+  prometheus:
+    scrapeInterval: 15s
+
+ingress:
+  enabled: false

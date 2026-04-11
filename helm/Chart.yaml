@@ -1,0 +1,7 @@
+apiVersion: v1
+name: platform
+version: 1.0.0
+description: ACORIA Container Orchestration Platform
+home: https://github.com/Alexsovich5/kubernetes-platform
+maintainers:
+  - name: Alexander Efrem

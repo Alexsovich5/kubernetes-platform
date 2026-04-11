@@ -1,0 +1,96 @@
+# Kubernetes Deployment Configuration
+# IT Operations Specialist - ACORIA (2016)
+
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: platform-app
+  labels:
+    app: platform
+    tier: backend
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: platform
+        tier: backend
+    spec:
+      containers:
+      - name: app
+        image: acoria/platform-app:latest
+        ports:
+        - containerPort: 8080
+          name: http
+        resources:
+          requests:
+            cpu: 250m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        env:
+        - name: NODE_ENV
+          value: production
+        - name: DB_HOST
+          valueFrom:
+            secretKeyRef:
+              name: platform-secrets
+              key: db-host
+        volumeMounts:
+        - name: config
+          mountPath: /app/config
+          readOnly: true
+      volumes:
+      - name: config
+        configMap:
+          name: platform-config
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: platform-worker
+  labels:
+    app: platform
+    tier: worker
+spec:
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        app: platform
+        tier: worker
+    spec:
+      containers:
+      - name: worker
+        image: acoria/platform-worker:latest
+        resources:
+          requests:
+            cpu: 500m
+            memory: 512Mi
+          limits:
+            cpu: 1000m
+            memory: 1Gi
+        env:
+        - name: QUEUE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: platform-config
+              key: queue-url
