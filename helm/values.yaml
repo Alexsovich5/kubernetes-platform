@@ -1,7 +1,7 @@
 replicaCount: 3
 
 image:
-  repository: acoria/platform-app
+  repository: example/platform-app
   tag: latest
   pullPolicy: IfNotPresent
 

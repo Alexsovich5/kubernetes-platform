@@ -1,6 +1,5 @@
 #!/bin/bash
 # Kubernetes Platform Deployment Script
-# IT Operations Specialist - ACORIA (2016)
 
 set -e
 

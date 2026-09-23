@@ -1,5 +1,4 @@
 # Kubernetes Deployment Configuration
-# IT Operations Specialist - ACORIA (2016)
 
 apiVersion: extensions/v1beta1
 kind: Deployment
@@ -23,7 +22,7 @@ spec:
     spec:
       containers:
       - name: app
-        image: acoria/platform-app:latest
+        image: example/platform-app:latest
         ports:
         - containerPort: 8080
           name: http
@@ -80,7 +79,7 @@ spec:
     spec:
       containers:
       - name: worker
-        image: acoria/platform-worker:latest
+        image: example/platform-worker:latest
         resources:
           requests:
             cpu: 500m
