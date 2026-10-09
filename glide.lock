@@ -1,0 +1,32 @@
+hash: 5113cce129e88adb66b1a0dd43a6ebceaaf566b98d80a8b8652f90f7e20e298b
+updated: 2026-10-09T16:43:32.635696605Z
+imports:
+- name: bitbucket.org/ww/goautoneg
+  version: a547fc61f48d567d5b4ec6f8aee5573d8efce11d
+  repo: https://github.com/munnerz/goautoneg
+  vcs: git
+- name: github.com/beorn7/perks
+  version: b965b613227fddccbfffe13eae360ed3fa822f8d
+  subpackages:
+  - quantile
+- name: github.com/golang/protobuf
+  version: f0a097ddac24fb00e07d2ac17f8671423f3ea47c
+  subpackages:
+  - proto
+- name: github.com/matttproud/golang_protobuf_extensions
+  version: 3247c84500bff8d9fb6d579d800f20b3e091582c
+  subpackages:
+  - pbutil
+- name: github.com/prometheus/client_golang
+  version: 6dbab8106ed3ed77359ac85d9cf08e30290df864
+  subpackages:
+  - prometheus
+- name: github.com/prometheus/client_model
+  version: fa8ad6fec33561be4280a8f0514318c79d7f6cb6
+  subpackages:
+  - go
+- name: github.com/prometheus/procfs
+  version: c91d8eefde16bd047416409eb56353ea84a186e4
+- name: gopkg.in/yaml.v2
+  version: e4d366fc3c7938e2958e662b4258c7a89e1f0e3e
+testImports: []

@@ -13,6 +13,13 @@ RUN cd cache \
  && grep -E '  bats-v0\.4\.0\.tar\.gz$' ../SHA256SUMS | sha256sum -c - \
  && tar -xzf bats-v0.4.0.tar.gz \
  && bats-0.4.0/install.sh /usr/local \
+ && rm -rf bats-0.4.0
+
+COPY cache/glide-v0.11.1-linux-amd64.tar.gz /tmp/build/cache/
+RUN cd cache \
+ && grep -E '  glide-v0\.11\.1-linux-amd64\.tar\.gz$' ../SHA256SUMS | sha256sum -c - \
+ && tar -xzf glide-v0.11.1-linux-amd64.tar.gz \
+ && install -m 0755 linux-amd64/glide /usr/local/bin/glide \
  && cd / && rm -rf /tmp/build
 
 WORKDIR /go

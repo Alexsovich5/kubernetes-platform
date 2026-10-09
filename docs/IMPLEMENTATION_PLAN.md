@@ -59,7 +59,7 @@ This plan implements `docs/SPEC.md`. There are 14 tasks and each task is one com
     - `github.com/matttproud/golang_protobuf_extensions` `v1.0.0`
     - `bitbucket.org/ww/goautoneg` with `repo: https://github.com/munnerz/goautoneg`, `vcs: git`, `version: a547fc61f48d567d5b4ec6f8aee5573d8efce11d`
     - `gopkg.in/yaml.v2` `e4d366fc3c7938e2958e662b4258c7a89e1f0e3e`
-  - create `glide.lock` and `vendor/…` (produced by `make vendor`, which runs `glide install` in the tools image)
+  - create `glide.lock` and `vendor/…` (produced by `make vendor`, which runs `glide install --strip-vcs --strip-vendor` in the tools image, so `vendor/` holds no `.git` directories or client_golang `Godeps/_workspace` copies)
   - create `build/lock_dates.py`. It is a host-side Python 3 script that reads each `name`/`version` pair from `glide.lock`, maps `bitbucket.org/ww/goautoneg` to `github.com/munnerz/goautoneg`, and fetches `https://proxy.golang.org/<module>/@v/<version>.info`. It exits 1 if any `Time` is after 2016-07-31 or any lookup fails.
   - create `pkg/app/config.go` and `pkg/app/config_test.go`
   - modify `Makefile`:

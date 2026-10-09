@@ -1,0 +1,4 @@
+package bad
+
+func   Misformatted( ) int {
+return 1 }

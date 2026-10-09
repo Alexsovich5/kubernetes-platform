@@ -1,0 +1,30 @@
+package: github.com/Alexsovich5/kubernetes-platform
+import:
+- package: github.com/prometheus/client_golang
+  version: 0.7.0
+  subpackages:
+  - prometheus
+- package: github.com/prometheus/client_model
+  version: fa8ad6fec33561be4280a8f0514318c79d7f6cb6
+  subpackages:
+  - go
+- package: github.com/prometheus/procfs
+  version: c91d8eefde16bd047416409eb56353ea84a186e4
+- package: github.com/beorn7/perks
+  version: b965b613227fddccbfffe13eae360ed3fa822f8d
+  subpackages:
+  - quantile
+- package: github.com/golang/protobuf
+  version: f0a097ddac24fb00e07d2ac17f8671423f3ea47c
+  subpackages:
+  - proto
+- package: github.com/matttproud/golang_protobuf_extensions
+  version: v1.0.0
+  subpackages:
+  - pbutil
+- package: bitbucket.org/ww/goautoneg
+  repo: https://github.com/munnerz/goautoneg
+  vcs: git
+  version: a547fc61f48d567d5b4ec6f8aee5573d8efce11d
+- package: gopkg.in/yaml.v2
+  version: e4d366fc3c7938e2958e662b4258c7a89e1f0e3e

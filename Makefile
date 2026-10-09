@@ -8,11 +8,12 @@ MIN_FREE_KB  := 15728640
 # <file in build/cache>^<download URL>
 FETCH_LIST := \
 	bats-v0.4.0.tar.gz^https://github.com/sstephenson/bats/archive/v0.4.0.tar.gz \
+	glide-v0.11.1-linux-amd64.tar.gz^https://github.com/Masterminds/glide/releases/download/v0.11.1/glide-v0.11.1-linux-amd64.tar.gz \
 	ca-certificates_20141019+deb8u4_all.deb^http://snapshot.debian.org/archive/debian-security/20180707T093525Z/pool/updates/main/c/ca-certificates/ca-certificates_20141019%2Bdeb8u4_all.deb
 
 DOCKER_RUN := docker run --rm -e OFFLINE -v $(CURDIR):$(REPO) -w $(REPO)
 
-.PHONY: preflight fetch tools-image test ci-unit shell
+.PHONY: preflight fetch tools-image test ci-unit shell vendor lock-check
 
 preflight:
 	docker system df
@@ -55,7 +56,21 @@ test: preflight fetch tools-image
 
 # Runs inside the tools image.
 ci-unit:
+	test -z "$$(gofmt -l cmd pkg tests)"
+	go vet ./cmd/... ./pkg/...
+	go test ./pkg/...
 	bats tests/unit
+
+# Resolves glide.yaml into glide.lock and vendor/ inside the tools image.
+vendor: tools-image
+	@for attempt in 1 2 3; do \
+		$(DOCKER_RUN) $(TOOLS_IMAGE) glide install --strip-vcs --strip-vendor && exit 0; \
+		echo "vendor: glide install failed (attempt $$attempt)" >&2; sleep 5; \
+	done; exit 1
+
+# Host-side: every glide.lock revision must be dated on or before 2016-07-31.
+lock-check:
+	python3 build/lock_dates.py glide.lock
 
 shell: tools-image
 	$(DOCKER_RUN) -it $(TOOLS_IMAGE) bash
