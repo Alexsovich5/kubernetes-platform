@@ -4,6 +4,7 @@ TOOLS_IMAGE  := kubernetes-platform:tools-2016
 CACHE        := build/cache
 # 15 GB in 1K blocks, as reported by df -Pk
 MIN_FREE_KB  := 15728640
+VERSION      := 0.1.0
 
 # <file in build/cache>^<download URL>
 FETCH_LIST := \
@@ -13,7 +14,7 @@ FETCH_LIST := \
 
 DOCKER_RUN := docker run --rm -e OFFLINE -v $(CURDIR):$(REPO) -w $(REPO)
 
-.PHONY: preflight fetch tools-image test ci-unit shell vendor lock-check
+.PHONY: preflight fetch tools-image test ci-unit shell vendor lock-check build
 
 preflight:
 	docker system df
@@ -71,6 +72,10 @@ vendor: tools-image
 # Host-side: every glide.lock revision must be dated on or before 2016-07-31.
 lock-check:
 	python3 build/lock_dates.py glide.lock
+
+# Builds bin/platform-app (linux/amd64) inside the tools image.
+build: tools-image
+	$(DOCKER_RUN) $(TOOLS_IMAGE) go build -ldflags "-X main.version=$(VERSION)" -o bin/platform-app ./cmd/platform-app
 
 shell: tools-image
 	$(DOCKER_RUN) -it $(TOOLS_IMAGE) bash
