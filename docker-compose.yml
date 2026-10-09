@@ -1,0 +1,29 @@
+version: '2'
+
+name: kubernetes-platform
+
+services:
+  app:
+    build: .
+    image: kubernetes-platform:app-0.1.0
+    ports:
+      - "20180:8080"
+    volumes:
+      - ./tests/fixtures/config:/app/config:ro
+    networks:
+      - kp
+
+  tools:
+    image: kubernetes-platform:tools-2016
+    entrypoint: []
+    volumes:
+      - .:/go/src/github.com/Alexsovich5/kubernetes-platform
+    working_dir: /go/src/github.com/Alexsovich5/kubernetes-platform
+    networks:
+      - kp
+
+networks:
+  kp:
+    ipam:
+      config:
+        - subnet: 172.41.0.0/24

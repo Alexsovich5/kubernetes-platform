@@ -76,7 +76,7 @@ All of it runs and is tested inside Docker.
 | `helm upgrade` | The command does not exist in Helm v2.0.0-alpha.2. Upgrades are done by re-applying manifests or installing a release under a new name. |
 | Docker 1.10 engine | The host runs a modern engine. Dockerfiles and Compose stay within Docker 1.10 and Compose 1.6 features (no multi-stage builds, no `ARG` before `FROM`, Compose file format `2`). |
 | Business-impact percentages, status badge and employer/role/date statements from the original README | Unmeasurable. Dropped. |
-| Pushing images to a registry | No registry exists in the period stack or in the README. Images are built and tagged locally as `platform-app:0.1.0`. |
+| Pushing images to a registry | No registry exists in the period stack or in the README. Images are built and tagged locally (`kubernetes-platform:app-0.1.0` for the app). |
 
 ## Architecture
 
@@ -108,7 +108,7 @@ Data flow:
 
 Images (all built locally from `golang:1.6.3@sha256:9bc3717d…dbd1`):
 
-- `platform-app:0.1.0` — root `Dockerfile`, build context `.`.
+- `kubernetes-platform:app-0.1.0` — root `Dockerfile`, build context `.`, built by Compose. The image is tagged under the repo's `kubernetes-platform` name because other projects share the Docker host; the Kubernetes manifests and chart reference it as `platform-app:0.1.0`, a name that is only used inside the kubelet-less cluster, where pods never pull images.
 - `kubernetes-platform:helm-v2.0.0-alpha.2` — `build/helm/Dockerfile`, build context `build/`. Builds the `helm` and `tiller` binaries from source at tag `v2.0.0-alpha.2`. Clone, glide install, `go install` and the removal of `/go/src/*`, `/go/pkg` and `~/.glide` happen in one `RUN`, so only the two binaries stay in the image.
 - `kubernetes-platform:tools-2016` — `build/tools/Dockerfile`, build context `build/`, `FROM kubernetes-platform:helm-v2.0.0-alpha.2`. Adds bats, glide, etcd, the Kubernetes binaries and Prometheus/promtool from `build/cache/`, and runs `helm init --client-only` so `$HELM_HOME` exists. The control-plane, Tiller and Prometheus services in Compose run from this image with different commands.
 

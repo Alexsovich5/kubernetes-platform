@@ -12,9 +12,11 @@ FETCH_LIST := \
 	glide-v0.11.1-linux-amd64.tar.gz^https://github.com/Masterminds/glide/releases/download/v0.11.1/glide-v0.11.1-linux-amd64.tar.gz \
 	ca-certificates_20141019+deb8u4_all.deb^http://snapshot.debian.org/archive/debian-security/20180707T093525Z/pool/updates/main/c/ca-certificates/ca-certificates_20141019%2Bdeb8u4_all.deb
 
+COMPOSE    := docker compose -p kubernetes-platform
+
 DOCKER_RUN := docker run --rm -e OFFLINE -v $(CURDIR):$(REPO) -w $(REPO)
 
-.PHONY: preflight fetch tools-image test ci-unit shell vendor lock-check build
+.PHONY: preflight fetch tools-image test ci-unit shell vendor lock-check build up down integration
 
 preflight:
 	docker system df
@@ -76,6 +78,27 @@ lock-check:
 # Builds bin/platform-app (linux/amd64) inside the tools image.
 build: tools-image
 	$(DOCKER_RUN) $(TOOLS_IMAGE) go build -ldflags "-X main.version=$(VERSION)" -o bin/platform-app ./cmd/platform-app
+
+# Starts the Compose stack. The tools image is a local tag, so build it first.
+up: fetch tools-image
+	@for attempt in 1 2 3; do \
+		$(COMPOSE) up -d --build && exit 0; \
+		echo "up: compose up failed (attempt $$attempt)" >&2; sleep 5; \
+	done; exit 1
+
+down:
+	$(COMPOSE) down
+
+# Runs the bats integration suites on the Compose network and always tears
+# the stack down afterwards. Only this project's containers, networks and
+# anonymous volumes are removed; nothing is pruned.
+integration:
+	@status=0; \
+	$(MAKE) up || status=$$?; \
+	if [ "$$status" = 0 ]; then $(COMPOSE) run --rm tools bash -c '. tests/integration/helpers.bash && wait_for_url http://app:8080/health 60' || status=$$?; fi; \
+	if [ "$$status" = 0 ]; then $(COMPOSE) run --rm tools bats tests/integration || status=$$?; fi; \
+	$(COMPOSE) down -v; \
+	exit $$status
 
 shell: tools-image
 	$(DOCKER_RUN) -it $(TOOLS_IMAGE) bash

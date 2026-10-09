@@ -111,7 +111,7 @@ This plan implements `docs/SPEC.md`. There are 14 tasks and each task is one com
     - `go install -ldflags "-X main.version=0.1.0" ./cmd/platform-app`
     - `EXPOSE 8080`, `CMD ["platform-app"]`
   - create `docker-compose.yml` (v2) with two services:
-    - `app`: build `.`, image `platform-app:0.1.0`, port 8080, `./tests/fixtures/config` mounted as `/app/config`
+    - `app`: build `.`, image `kubernetes-platform:app-0.1.0` (the shared-host naming rule; the `k8s/` and chart manifests still reference `platform-app:0.1.0`), host port `20180` → container `8080`, `./tests/fixtures/config` mounted as `/app/config`
     - `tools`: image `kubernetes-platform:tools-2016`, repo mounted at `/go/src/github.com/Alexsovich5/kubernetes-platform`, `working_dir` set to the same path, `entrypoint: []`
   - create `tests/fixtures/config/message`
   - create `tests/integration/helpers.bash` with `wait_for_url <url> <seconds>`
