@@ -7,14 +7,15 @@ This plan implements `docs/SPEC.md`. There are 14 tasks and each task is one com
 - Go import path: `github.com/Alexsovich5/kubernetes-platform`. Inside containers the repo is mounted at `/go/src/github.com/Alexsovich5/kubernetes-platform` (called `$(REPO)` in the Makefile), so GOPATH and `vendor/` work the Go 1.6 way.
 - Base image: every `FROM golang` line is `FROM golang:1.6.3@sha256:9bc3717d167110a13be0ca34936a1d2d509f1775499649a6be616330ab20dbd1`.
 - `make test` runs `preflight`, `fetch` and `tools-image` if needed, then:
-  `docker run --rm -v $(CURDIR):$(REPO) -w $(REPO) kp-tools:2016 make -f Makefile ci-unit`.
-- `make integration` runs `make up`, waits for readiness, runs `docker compose run --rm tools bats tests/integration`, and always finishes with `docker compose down -v` and `docker image prune -f`.
+  `docker run --rm -v $(CURDIR):$(REPO) -w $(REPO) kubernetes-platform:tools-2016 make -f Makefile ci-unit`.
+- `make integration` runs `make up`, waits for readiness, runs `docker compose run --rm tools bats tests/integration`, and always finishes with `docker compose down -v`. It never prunes images, volumes or networks, because other projects share the Docker host.
 - `make up` runs `fetch`, `helm-image` (from T9), `tools-image` and `docker compose up -d --build`, in that order. `kp-tools` is built `FROM` the local `kp-helm` tag, so plain `docker compose up` on a fresh clone does not work.
 - Dockerfiles use only Docker 1.10 features: no multi-stage builds, no `HEALTHCHECK`, and no `ARG` before `FROM`. The Compose file uses `version: '2'`.
 - No Dockerfile downloads release files. `make fetch` downloads them on the host into the git-ignored `build/cache/` and runs `cd build/cache && sha256sum -c ../SHA256SUMS`. `build/SHA256SUMS` holds the hashes from the SPEC table. Dockerfiles `COPY` from `cache/` (build context `build/`) and run `sha256sum -c` again.
 - The first `RUN` of `build/tools/Dockerfile` and `build/helm/Dockerfile` is `dpkg -i cache/ca-certificates_20141019+deb8u4_all.deb && update-ca-certificates`. It must come before any HTTPS access (`glide install`, `git clone`). See the SPEC note on the build-time trust store.
 - Makefile recipes escape shell command substitution as `$$(…)`. A single `$(…)` is expanded by make as a variable and turns into an empty string.
 - Every kubectl call in scripts and tests uses `--namespace=<ns>`. kubectl 1.2 has no `-n` shorthand.
+- Shared Docker host: every image this repo builds is tagged `kubernetes-platform:<tag>` (`kubernetes-platform:tools-2016`, `kubernetes-platform:helm-v2.0.0-alpha.2`; "kp-tools" and "kp-helm" in the text name these two images). The Compose project name is `kubernetes-platform` (top-level `name:`), its network uses subnet `172.41.0.0/24`, and every published host port lies in `20100`–`20199` (for example host `20180` → app `8080`, host `20190` → Prometheus `9090`). Container ports and in-network addresses are unchanged.
 - Commit messages contain no dates, no tool or AI attribution and no employer names.
 
 ---
@@ -31,7 +32,7 @@ This plan implements `docs/SPEC.md`. There are 14 tasks and each task is one com
   - create `Makefile` with these targets:
     - `preflight`: prints `docker system df` and `docker volume ls -qf dangling=true`, then runs `df -Pk /` in a throwaway `golang:1.6.3@sha256:…` container and fails if less than 15 GB is available
     - `fetch`: `curl -fsSL -o build/cache/<file> <url>` for each entry missing from the cache, then `sha256sum -c`
-    - `tools-image`: `docker build -t kp-tools:2016 -f build/tools/Dockerfile build/`
+    - `tools-image`: `docker build -t kubernetes-platform:tools-2016 -f build/tools/Dockerfile build/`
     - `test`, `ci-unit` and `shell`
   - create `tests/unit/harness.bats`
   - create `.gitignore` (`bin/`, `*.tgz`, `build/cache/`) and `.dockerignore` (`.git`, `bin`, `build/cache`)
@@ -111,7 +112,7 @@ This plan implements `docs/SPEC.md`. There are 14 tasks and each task is one com
     - `EXPOSE 8080`, `CMD ["platform-app"]`
   - create `docker-compose.yml` (v2) with two services:
     - `app`: build `.`, image `platform-app:0.1.0`, port 8080, `./tests/fixtures/config` mounted as `/app/config`
-    - `tools`: image `kp-tools:2016`, repo mounted at `/go/src/github.com/Alexsovich5/kubernetes-platform`, `working_dir` set to the same path, `entrypoint: []`
+    - `tools`: image `kubernetes-platform:tools-2016`, repo mounted at `/go/src/github.com/Alexsovich5/kubernetes-platform`, `working_dir` set to the same path, `entrypoint: []`
   - create `tests/fixtures/config/message`
   - create `tests/integration/helpers.bash` with `wait_for_url <url> <seconds>`
   - create `tests/integration/app.bats`
@@ -268,8 +269,8 @@ This plan implements `docs/SPEC.md`. There are 14 tasks and each task is one com
       - `glide install`
       - `go install k8s.io/helm/cmd/helm k8s.io/helm/cmd/tiller`
       - `rm -rf /go/src/* /go/pkg ~/.glide`
-  - modify `build/tools/Dockerfile`: `FROM kp-helm:v2.0.0-alpha.2`, then `RUN helm init --client-only` so `$HELM_HOME` exists
-  - modify `Makefile`: `helm-image` runs `preflight`, then `docker build -t kp-helm:v2.0.0-alpha.2 -f build/helm/Dockerfile build/`; `tools-image` and `up` depend on `helm-image`
+  - modify `build/tools/Dockerfile`: `FROM kubernetes-platform:helm-v2.0.0-alpha.2`, then `RUN helm init --client-only` so `$HELM_HOME` exists
+  - modify `Makefile`: `helm-image` runs `preflight`, then `docker build -t kubernetes-platform:helm-v2.0.0-alpha.2 -f build/helm/Dockerfile build/`; `tools-image` and `up` depend on `helm-image`
   - modify `docker-compose.yml`:
     - add the `tiller` service: `tiller --listen :44134 --namespace production`, with `KUBECONFIG=/go/src/github.com/Alexsovich5/kubernetes-platform/build/kubeconfig`
     - set `HELM_HOST=tiller:44134` on `tools`
@@ -280,7 +281,7 @@ This plan implements `docs/SPEC.md`. There are 14 tasks and each task is one com
   - Integration:
     - `helm list` exits 0 with `HELM_HOST=tiller:44134`
     - `curl -fs http://tiller:44135/readiness` succeeds
-- **Acceptance:** `make preflight && make test && make integration`, then `docker image ls kp-helm:v2.0.0-alpha.2` shows an image under 1 GB
+- **Acceptance:** `make preflight && make test && make integration`, then `docker image ls kubernetes-platform:helm-v2.0.0-alpha.2` shows an image under 1 GB
 - **Commit:** `Build Helm and Tiller v2.0.0-alpha.2 from source for tooling`
   > No alpha.2 binaries remain downloadable, so compile them with glide in a
   > single layer, substituting a git mirror for the retired bitbucket
