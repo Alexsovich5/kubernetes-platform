@@ -6,6 +6,7 @@ CACHE        := build/cache
 # 15 GB in 1K blocks, as reported by df -Pk
 MIN_FREE_KB  := 15728640
 VERSION      := 0.1.0
+SA_DIR       := /var/run/secrets/kubernetes.io/serviceaccount
 
 # <file in build/cache>^<download URL>
 FETCH_LIST := \
@@ -16,7 +17,8 @@ FETCH_LIST := \
 	kube-apiserver^https://storage.googleapis.com/kubernetes-release/release/v1.2.6/bin/linux/amd64/kube-apiserver \
 	kube-controller-manager^https://storage.googleapis.com/kubernetes-release/release/v1.2.6/bin/linux/amd64/kube-controller-manager \
 	kube-scheduler^https://storage.googleapis.com/kubernetes-release/release/v1.2.6/bin/linux/amd64/kube-scheduler \
-	kubectl^https://storage.googleapis.com/kubernetes-release/release/v1.2.6/bin/linux/amd64/kubectl
+	kubectl^https://storage.googleapis.com/kubernetes-release/release/v1.2.6/bin/linux/amd64/kubectl \
+	prometheus-0.20.0.linux-amd64.tar.gz^https://github.com/prometheus/prometheus/releases/download/0.20.0/prometheus-0.20.0.linux-amd64.tar.gz
 
 COMPOSE    := docker compose -p kubernetes-platform
 
@@ -76,6 +78,13 @@ ci-unit:
 	go vet ./cmd/... ./pkg/...
 	go test ./pkg/... ./tests/manifests/...
 	helm lint helm/platform | tee /dev/stderr | grep -qx 'Lint OK'
+	@# prometheus.yml reads the in-cluster service account files that a pod
+	@# mounts; promtool 0.20 checks that they exist, so provide empty ones.
+	mkdir -p $(SA_DIR) && touch $(SA_DIR)/token $(SA_DIR)/ca.crt
+	promtool check-config prometheus/prometheus.yml
+	promtool check-config prometheus/prometheus-local.yml
+	promtool check-rules prometheus/alert_rules.yml
+	promtool check-rules prometheus/alert_rules_local.yml
 	cd /tmp && rm -f platform-0.1.0.tgz && helm package --save=false $(REPO)/helm/platform && test -f /tmp/platform-0.1.0.tgz
 	bats tests/unit
 
@@ -111,8 +120,10 @@ down:
 integration:
 	@status=0; \
 	$(MAKE) up || status=$$?; \
-	if [ "$$status" = 0 ]; then $(COMPOSE) run --rm tools bash -c '. tests/integration/helpers.bash && wait_for_url http://app:8080/health 60 && wait_for_url http://apiserver:8080/healthz 90' || status=$$?; fi; \
+	if [ "$$status" = 0 ]; then $(COMPOSE) run --rm tools bash -c '. tests/integration/helpers.bash && wait_for_url http://app:8080/health 60 && wait_for_url http://apiserver:8080/healthz 90 && wait_for_url http://prometheus:9090/api/v1/query?query=up 60' || status=$$?; fi; \
 	if [ "$$status" = 0 ]; then $(COMPOSE) run --rm tools bats tests/integration || status=$$?; fi; \
+	if [ "$$status" = 0 ]; then $(COMPOSE) stop app || status=$$?; fi; \
+	if [ "$$status" = 0 ]; then $(COMPOSE) run --rm tools bats tests/integration/alerts || status=$$?; fi; \
 	$(COMPOSE) down -v; \
 	exit $$status
 

@@ -29,6 +29,16 @@ RUN cd cache \
  && install -m 0755 etcd-v2.2.5-linux-amd64/etcd etcd-v2.2.5-linux-amd64/etcdctl /usr/local/bin/ \
  && rm -rf etcd-v2.2.5-linux-amd64 etcd-v2.2.5-linux-amd64.tar.gz
 
+# Prometheus and promtool 0.20.0, with the console templates.
+COPY cache/prometheus-0.20.0.linux-amd64.tar.gz /tmp/build/cache/
+RUN cd cache \
+ && grep -E '  prometheus-0\.20\.0\.linux-amd64\.tar\.gz$' ../SHA256SUMS | sha256sum -c - \
+ && tar -xzf prometheus-0.20.0.linux-amd64.tar.gz \
+ && install -m 0755 prometheus-0.20.0.linux-amd64/prometheus prometheus-0.20.0.linux-amd64/promtool /usr/local/bin/ \
+ && mkdir -p /usr/share/prometheus /prometheus \
+ && cp -r prometheus-0.20.0.linux-amd64/consoles prometheus-0.20.0.linux-amd64/console_libraries /usr/share/prometheus/ \
+ && rm -rf prometheus-0.20.0.linux-amd64 prometheus-0.20.0.linux-amd64.tar.gz
+
 # Kubernetes v1.2.6 control-plane binaries and kubectl.
 COPY cache/kube-apiserver cache/kube-controller-manager cache/kube-scheduler cache/kubectl /tmp/build/cache/
 RUN cd cache \

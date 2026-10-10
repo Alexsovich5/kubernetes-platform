@@ -92,6 +92,32 @@ services:
     networks:
       - kp
 
+  # Prometheus 0.20.0 from the release tarball installed in the tools image.
+  # Its Kubernetes SD stops discovering if the first list against the
+  # apiserver fails, so start it only once the apiserver answers.
+  prometheus:
+    image: kubernetes-platform:tools-2016
+    entrypoint: []
+    depends_on:
+      - app
+      - apiserver
+    volumes:
+      - ./prometheus:/etc/prometheus:ro
+    command:
+      - bash
+      - -c
+      - >-
+        until curl -fs -o /dev/null http://apiserver:8080/api/v1/pods; do sleep 1; done;
+        exec prometheus
+        -config.file=/etc/prometheus/prometheus-local.yml
+        -storage.local.path=/prometheus
+        -web.console.libraries=/usr/share/prometheus/console_libraries
+        -web.console.templates=/usr/share/prometheus/consoles
+    ports:
+      - "20190:9090"
+    networks:
+      - kp
+
 networks:
   kp:
     ipam:

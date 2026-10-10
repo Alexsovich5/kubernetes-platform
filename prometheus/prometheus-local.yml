@@ -1,0 +1,21 @@
+# Compose variant: scrapes the app container statically and discovers the
+# local apiserver (insecure port) through Kubernetes SD.
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+rule_files:
+  - "alert_rules_local.yml"
+
+scrape_configs:
+  - job_name: 'platform-app'
+    static_configs:
+      - targets: ['app:8080']
+
+  - job_name: 'kubernetes-apiserver'
+    kubernetes_sd_configs:
+      - api_servers: ['http://apiserver:8080']
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_role]
+        action: keep
+        regex: apiserver

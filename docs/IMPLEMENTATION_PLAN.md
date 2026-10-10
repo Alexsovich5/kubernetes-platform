@@ -337,8 +337,9 @@ This plan implements `docs/SPEC.md`. There are 14 tasks and each task is one com
     - jobs `platform-app` (static `app:8080`) and `kubernetes-apiserver` (SD `api_servers: ['http://apiserver:8080']`)
     - `global: {scrape_interval: 5s, evaluation_interval: 5s}`
   - create `prometheus/alert_rules_local.yml`
-  - modify `docker-compose.yml`: add the `prometheus` service (tools image, `prometheus -config.file=/etc/prometheus/prometheus-local.yml -storage.local.path=/prometheus`, port 9090)
+  - modify `docker-compose.yml`: add the `prometheus` service (tools image, `prometheus -config.file=/etc/prometheus/prometheus-local.yml -storage.local.path=/prometheus`, port 9090). The command waits in a `bash -c` loop until `http://apiserver:8080/api/v1/pods` answers and then `exec`s Prometheus, because 0.20 Kubernetes SD stops discovering for good if its first list fails.
   - modify `Makefile`: `ci-unit` adds `promtool check-config` on both configs and `promtool check-rules` on both rule files
+    - promtool 0.20 `check-config` stats `bearer_token_file` and `ca_file`. `prometheus.yml` points them at the in-cluster service-account mount, so `ci-unit` (and `tests/unit/prometheus.bats`) first create empty `token` and `ca.crt` files under `/var/run/secrets/kubernetes.io/serviceaccount`, as a pod would have.
   - create `tests/integration/prometheus.bats`
   - create `tests/integration/alerts/app-down.bats`
   - modify `Makefile`: after the main `bats tests/integration` run, `integration` runs `docker compose stop app` on the host, then `docker compose run --rm tools bats tests/integration/alerts`. A period docker CLI inside the container cannot talk to the modern daemon, so the stop step must run on the host.

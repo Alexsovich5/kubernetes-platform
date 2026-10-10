@@ -1,0 +1,11 @@
+ALERT PlatformAppDown
+  IF up{job="platform-app"} == 0
+  FOR 10s
+  LABELS { severity = "page" }
+  ANNOTATIONS { summary = "platform-app instance {{ $labels.instance }} down" }
+
+ALERT PlatformAppHighErrorRate
+  IF sum(rate(http_requests_total{job="platform-app",code=~"5.."}[5m])) / sum(rate(http_requests_total{job="platform-app"}[5m])) > 0.05
+  FOR 10s
+  LABELS { severity = "warning" }
+  ANNOTATIONS { summary = "platform-app 5xx ratio above 5%" }
