@@ -413,7 +413,7 @@ This plan implements `docs/SPEC.md`. There are 14 tasks and each task is one com
     - "Script unit tests stub kubectl/helm/docker."
   - Known limitations from the SPEC (release-name reuse, orphaned ReplicaSets after `helm delete`, post-period CA bundle in the build images)
   - Built with: the pinned versions
-  - Running it: `make up` (fetches release files, builds `kp-helm` then `kp-tools`, starts Compose), with smoke command `curl -s localhost:8080/ && curl -s 'localhost:9090/api/v1/query?query=up'`, and `make down` to stop
+  - Running it: `make up` (fetches release files, builds `kp-helm` then `kp-tools`, starts Compose), with smoke command `curl -s localhost:20180/ && curl -s 'localhost:20190/api/v1/query?query=up'` (the published host ports from the shared-host convention above; the containers still listen on 8080 and 9090), and `make down` to stop
   - Tests: `make test`, and `make integration`/`make test-all`
   - Layout: the output of `{ git ls-files | grep -v '^vendor/'; echo 'vendor/  (glide-managed, not listed)'; }` inside a code block
   - No badges, employer, role, dates or metrics. Remove the template comment block.
