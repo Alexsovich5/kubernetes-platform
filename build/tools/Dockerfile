@@ -20,6 +20,20 @@ RUN cd cache \
  && grep -E '  glide-v0\.11\.1-linux-amd64\.tar\.gz$' ../SHA256SUMS | sha256sum -c - \
  && tar -xzf glide-v0.11.1-linux-amd64.tar.gz \
  && install -m 0755 linux-amd64/glide /usr/local/bin/glide \
+ && rm -rf linux-amd64 glide-v0.11.1-linux-amd64.tar.gz
+
+COPY cache/etcd-v2.2.5-linux-amd64.tar.gz /tmp/build/cache/
+RUN cd cache \
+ && grep -E '  etcd-v2\.2\.5-linux-amd64\.tar\.gz$' ../SHA256SUMS | sha256sum -c - \
+ && tar -xzf etcd-v2.2.5-linux-amd64.tar.gz \
+ && install -m 0755 etcd-v2.2.5-linux-amd64/etcd etcd-v2.2.5-linux-amd64/etcdctl /usr/local/bin/ \
+ && rm -rf etcd-v2.2.5-linux-amd64 etcd-v2.2.5-linux-amd64.tar.gz
+
+# Kubernetes v1.2.6 control-plane binaries and kubectl.
+COPY cache/kube-apiserver cache/kube-controller-manager cache/kube-scheduler cache/kubectl /tmp/build/cache/
+RUN cd cache \
+ && grep -E '  (kube-apiserver|kube-controller-manager|kube-scheduler|kubectl)$' ../SHA256SUMS | sha256sum -c - \
+ && install -m 0755 kube-apiserver kube-controller-manager kube-scheduler kubectl /usr/local/bin/ \
  && cd / && rm -rf /tmp/build
 
 WORKDIR /go

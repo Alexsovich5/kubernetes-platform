@@ -22,3 +22,9 @@
   [ "$status" -eq 0 ]
   [[ "$output" == *"refs/tags/v2.0.0-alpha.2"* ]]
 }
+
+@test "kubectl client is v1.2.6" {
+  run kubectl version --client
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'GitVersion:"v1.2.6"'* ]]
+}

@@ -19,8 +19,58 @@ services:
     volumes:
       - .:/go/src/github.com/Alexsovich5/kubernetes-platform
     working_dir: /go/src/github.com/Alexsovich5/kubernetes-platform
+    environment:
+      KUBECONFIG: /go/src/github.com/Alexsovich5/kubernetes-platform/build/kubeconfig
     networks:
       - kp
+
+  etcd:
+    image: kubernetes-platform:tools-2016
+    entrypoint: []
+    command:
+      - etcd
+      - --data-dir=/var/lib/etcd/data
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --advertise-client-urls=http://etcd:2379
+    networks:
+      - kp
+
+  apiserver:
+    image: kubernetes-platform:tools-2016
+    entrypoint: []
+    depends_on:
+      - etcd
+    command:
+      - kube-apiserver
+      - --etcd-servers=http://etcd:2379
+      - --insecure-bind-address=0.0.0.0
+      - --insecure-port=8080
+      - --service-cluster-ip-range=10.0.0.0/24
+      - --admission-control=NamespaceLifecycle,LimitRanger,ResourceQuota
+    networks:
+      - kp
+
+  # kube-apiserver 1.2 health-checks these two at 127.0.0.1:10252 and
+  # 127.0.0.1:10251, so they share the apiserver's network namespace.
+  controller-manager:
+    image: kubernetes-platform:tools-2016
+    entrypoint: []
+    network_mode: "service:apiserver"
+    depends_on:
+      - apiserver
+    command:
+      - kube-controller-manager
+      - --master=http://127.0.0.1:8080
+
+  scheduler:
+    image: kubernetes-platform:tools-2016
+    entrypoint: []
+    network_mode: "service:apiserver"
+    depends_on:
+      - apiserver
+    command:
+      - kube-scheduler
+      - --master=http://127.0.0.1:8080
 
 networks:
   kp:

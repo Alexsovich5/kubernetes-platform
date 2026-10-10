@@ -10,7 +10,12 @@ VERSION      := 0.1.0
 FETCH_LIST := \
 	bats-v0.4.0.tar.gz^https://github.com/sstephenson/bats/archive/v0.4.0.tar.gz \
 	glide-v0.11.1-linux-amd64.tar.gz^https://github.com/Masterminds/glide/releases/download/v0.11.1/glide-v0.11.1-linux-amd64.tar.gz \
-	ca-certificates_20141019+deb8u4_all.deb^http://snapshot.debian.org/archive/debian-security/20180707T093525Z/pool/updates/main/c/ca-certificates/ca-certificates_20141019%2Bdeb8u4_all.deb
+	ca-certificates_20141019+deb8u4_all.deb^http://snapshot.debian.org/archive/debian-security/20180707T093525Z/pool/updates/main/c/ca-certificates/ca-certificates_20141019%2Bdeb8u4_all.deb \
+	etcd-v2.2.5-linux-amd64.tar.gz^https://github.com/etcd-io/etcd/releases/download/v2.2.5/etcd-v2.2.5-linux-amd64.tar.gz \
+	kube-apiserver^https://storage.googleapis.com/kubernetes-release/release/v1.2.6/bin/linux/amd64/kube-apiserver \
+	kube-controller-manager^https://storage.googleapis.com/kubernetes-release/release/v1.2.6/bin/linux/amd64/kube-controller-manager \
+	kube-scheduler^https://storage.googleapis.com/kubernetes-release/release/v1.2.6/bin/linux/amd64/kube-scheduler \
+	kubectl^https://storage.googleapis.com/kubernetes-release/release/v1.2.6/bin/linux/amd64/kubectl
 
 COMPOSE    := docker compose -p kubernetes-platform
 
@@ -95,7 +100,7 @@ down:
 integration:
 	@status=0; \
 	$(MAKE) up || status=$$?; \
-	if [ "$$status" = 0 ]; then $(COMPOSE) run --rm tools bash -c '. tests/integration/helpers.bash && wait_for_url http://app:8080/health 60' || status=$$?; fi; \
+	if [ "$$status" = 0 ]; then $(COMPOSE) run --rm tools bash -c '. tests/integration/helpers.bash && wait_for_url http://app:8080/health 60 && wait_for_url http://apiserver:8080/healthz 90' || status=$$?; fi; \
 	if [ "$$status" = 0 ]; then $(COMPOSE) run --rm tools bats tests/integration || status=$$?; fi; \
 	$(COMPOSE) down -v; \
 	exit $$status
