@@ -1,0 +1,28 @@
+# Default values for the platform chart. Helm v2.0.0-alpha.2 passes these to
+# the templates at the top level (.replicaCount, not .Values.replicaCount).
+replicaCount: 3
+
+image:
+  repository: platform-app
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+service:
+  type: LoadBalancer
+  port: 80
+  targetPort: 8080
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+# Written to the ConfigMap key "message" and served by GET /.
+message: "hello from helm"
+
+# Adds the prometheus.io/scrape, port and path pod annotations.
+monitoring:
+  enabled: true

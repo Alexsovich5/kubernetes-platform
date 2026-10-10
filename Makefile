@@ -75,6 +75,8 @@ ci-unit:
 	test -z "$$(gofmt -l cmd pkg tests)"
 	go vet ./cmd/... ./pkg/...
 	go test ./pkg/... ./tests/manifests/...
+	helm lint helm/platform | tee /dev/stderr | grep -qx 'Lint OK'
+	cd /tmp && rm -f platform-0.1.0.tgz && helm package --save=false $(REPO)/helm/platform && test -f /tmp/platform-0.1.0.tgz
 	bats tests/unit
 
 # Resolves glide.yaml into glide.lock and vendor/ inside the tools image.

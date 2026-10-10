@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{template "fullname" .}}
+  labels:
+    app: platform
+    heritage: {{.Release.Service}}
+    release: {{.Release.Name}}
+data:
+  message: {{.message | quote}}

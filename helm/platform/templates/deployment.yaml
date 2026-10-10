@@ -1,0 +1,64 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: {{template "fullname" .}}
+  labels:
+    app: platform
+    tier: backend
+    heritage: {{.Release.Service}}
+    release: {{.Release.Name}}
+spec:
+  replicas: {{.replicaCount}}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: platform
+        tier: backend
+        heritage: {{.Release.Service}}
+        release: {{.Release.Name}}
+{{- if .monitoring.enabled}}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "{{.service.targetPort}}"
+        prometheus.io/path: /metrics
+{{- end}}
+    spec:
+      containers:
+      - name: app
+        image: "{{.image.repository}}:{{.image.tag}}"
+        imagePullPolicy: {{.image.pullPolicy}}
+        ports:
+        - containerPort: {{.service.targetPort}}
+          name: http
+        resources:
+          requests:
+            cpu: {{.resources.requests.cpu}}
+            memory: {{.resources.requests.memory}}
+          limits:
+            cpu: {{.resources.limits.cpu}}
+            memory: {{.resources.limits.memory}}
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: {{.service.targetPort}}
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: {{.service.targetPort}}
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        volumeMounts:
+        - name: config
+          mountPath: /app/config
+          readOnly: true
+      volumes:
+      - name: config
+        configMap:
+          name: {{template "fullname" .}}
