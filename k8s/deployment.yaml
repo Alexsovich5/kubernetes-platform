@@ -19,10 +19,14 @@ spec:
       labels:
         app: platform
         tier: backend
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: /metrics
     spec:
       containers:
       - name: app
-        image: example/platform-app:latest
+        image: platform-app:0.1.0
         ports:
         - containerPort: 8080
           name: http
@@ -45,14 +49,6 @@ spec:
             port: 8080
           initialDelaySeconds: 30
           periodSeconds: 10
-        env:
-        - name: NODE_ENV
-          value: production
-        - name: DB_HOST
-          valueFrom:
-            secretKeyRef:
-              name: platform-secrets
-              key: db-host
         volumeMounts:
         - name: config
           mountPath: /app/config
@@ -61,35 +57,3 @@ spec:
       - name: config
         configMap:
           name: platform-config
----
-apiVersion: extensions/v1beta1
-kind: Deployment
-metadata:
-  name: platform-worker
-  labels:
-    app: platform
-    tier: worker
-spec:
-  replicas: 2
-  template:
-    metadata:
-      labels:
-        app: platform
-        tier: worker
-    spec:
-      containers:
-      - name: worker
-        image: example/platform-worker:latest
-        resources:
-          requests:
-            cpu: 500m
-            memory: 512Mi
-          limits:
-            cpu: 1000m
-            memory: 1Gi
-        env:
-        - name: QUEUE_URL
-          valueFrom:
-            configMapKeyRef:
-              name: platform-config
-              key: queue-url
