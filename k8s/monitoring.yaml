@@ -1,21 +1,117 @@
+# Prometheus 0.20 monitoring stack for the cluster. The ConfigMap data is a
+# verbatim copy of prometheus/prometheus.yml and prometheus/alert_rules.yml;
+# tests/manifests checks that the copies match byte for byte. Kubernetes 1.2
+# rejects underscores in ConfigMap keys, so the rules are stored under
+# alert-rules.yml and the volume items mount them as alert_rules.yml, the
+# name prometheus.yml's rule_files expects. metadata follows data because
+# kubectl drops the newline in front of a "---" separator, which would cut the
+# final newline off a literal block that ends the document.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+---
 apiVersion: v1
 kind: ConfigMap
-metadata:
-  name: prometheus-config
-  namespace: monitoring
 data:
   prometheus.yml: |
     global:
       scrape_interval: 15s
       evaluation_interval: 15s
+
+    rule_files:
+      - "alert_rules.yml"
+
     scrape_configs:
+      - job_name: 'kubernetes-apiserver'
+        scheme: https
+        tls_config:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        kubernetes_sd_configs:
+          - api_servers: ['https://kubernetes.default.svc']
+            in_cluster: true
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_role]
+            action: keep
+            regex: apiserver
+
+      - job_name: 'kubernetes-nodes'
+        scheme: https
+        tls_config:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        kubernetes_sd_configs:
+          - api_servers: ['https://kubernetes.default.svc']
+            in_cluster: true
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_role]
+            action: keep
+            regex: node
+          - action: labelmap
+            regex: __meta_kubernetes_node_label_(.+)
+
       - job_name: 'kubernetes-pods'
         kubernetes_sd_configs:
-          - role: pod
+          - api_servers: ['https://kubernetes.default.svc']
+            in_cluster: true
         relabel_configs:
-          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+          - source_labels: [__meta_kubernetes_role, __meta_kubernetes_pod_annotation_prometheus_io_scrape]
             action: keep
-            regex: true
+            regex: pod;true
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+            action: replace
+            target_label: __metrics_path__
+            regex: (.+)
+          - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+            action: replace
+            target_label: __address__
+            regex: ([^:]+)(?::\d+)?;(\d+)
+            replacement: ${1}:${2}
+          - action: labelmap
+            regex: __meta_kubernetes_pod_label_(.+)
+          - source_labels: [__meta_kubernetes_pod_namespace]
+            action: replace
+            target_label: kubernetes_namespace
+          - source_labels: [__meta_kubernetes_pod_name]
+            action: replace
+            target_label: kubernetes_pod_name
+
+      - job_name: 'kubernetes-services'
+        kubernetes_sd_configs:
+          - api_servers: ['https://kubernetes.default.svc']
+            in_cluster: true
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_role, __meta_kubernetes_service_annotation_prometheus_io_scrape]
+            action: keep
+            regex: service;true
+          - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_path]
+            action: replace
+            target_label: __metrics_path__
+            regex: (.+)
+          - action: labelmap
+            regex: __meta_kubernetes_service_label_(.+)
+          - source_labels: [__meta_kubernetes_service_namespace]
+            action: replace
+            target_label: kubernetes_namespace
+          - source_labels: [__meta_kubernetes_service_name]
+            action: replace
+            target_label: kubernetes_name
+  alert-rules.yml: |
+    ALERT PlatformAppDown
+      IF up{job="platform-app"} == 0
+      FOR 30s
+      LABELS { severity = "page" }
+      ANNOTATIONS { summary = "platform-app instance {{ $labels.instance }} down" }
+
+    ALERT PlatformAppHighErrorRate
+      IF sum(rate(http_requests_total{job="platform-app",code=~"5.."}[5m])) / sum(rate(http_requests_total{job="platform-app"}[5m])) > 0.05
+      FOR 5m
+      LABELS { severity = "warning" }
+      ANNOTATIONS { summary = "platform-app 5xx ratio above 5%" }
+metadata:
+  name: prometheus-config
+  namespace: monitoring
 ---
 apiVersion: extensions/v1beta1
 kind: Deployment
@@ -31,7 +127,10 @@ spec:
     spec:
       containers:
       - name: prometheus
-        image: prom/prometheus:v1.7.0
+        image: prom/prometheus:0.20.0
+        args:
+        - -config.file=/etc/prometheus/prometheus.yml
+        - -storage.local.path=/prometheus
         ports:
         - containerPort: 9090
         volumeMounts:
@@ -43,6 +142,11 @@ spec:
       - name: config
         configMap:
           name: prometheus-config
+          items:
+          - key: prometheus.yml
+            path: prometheus.yml
+          - key: alert-rules.yml
+            path: alert_rules.yml
       - name: data
         emptyDir: {}
 ---

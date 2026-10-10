@@ -360,13 +360,13 @@ This plan implements `docs/SPEC.md`. There are 14 tasks and each task is one com
 - **Files:**
   - modify `k8s/monitoring.yaml`:
     - add a `Namespace monitoring` document first
-    - the ConfigMap `prometheus-config` holds `prometheus.yml` and `alert_rules.yml` verbatim
+    - the ConfigMap `prometheus-config` holds `prometheus.yml` and `alert_rules.yml` verbatim. Kubernetes 1.2 rejects underscores in ConfigMap keys (`data[alert_rules.yml]: Invalid value`), so the rules use the key `alert-rules.yml` and the config volume lists `items` that mount it at `alert_rules.yml`, the name `rule_files` in `prometheus.yml` expects
     - image `prom/prometheus:0.20.0`
     - args `-config.file=/etc/prometheus/prometheus.yml -storage.local.path=/prometheus`
     - NodePort 30090 kept
   - modify `scripts/deploy.sh`: remove the out-of-band `create namespace monitoring`
   - modify `tests/unit/deploy.bats`
-  - modify `tests/manifests/manifests_test.go`: ConfigMap data must equal the files byte for byte
+  - modify `tests/manifests/manifests_test.go`: ConfigMap data must equal the files byte for byte; every ConfigMap key in `k8s/` must be a DNS subdomain; the volume items map each key to its file name. `splitDocuments` drops the newline before `---` as kubectl 1.2 does, so a literal block that ends a document would lose its final newline; the ConfigMap therefore lists `metadata` after `data`
   - create `tests/integration/monitoring.bats`
 - **Tests to write first:**
   - Unit: the sync test, which fails until the ConfigMap is regenerated; no `v1.x` Prometheus image tag

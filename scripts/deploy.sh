@@ -30,8 +30,8 @@ fi
 "$KUBECTL" apply --namespace="$NAMESPACE" -f "$ROOT/k8s/deployment.yaml"
 "$KUBECTL" apply --namespace="$NAMESPACE" -f "$ROOT/k8s/service.yaml"
 
-# monitoring.yaml sets namespace: monitoring on each object.
-"$KUBECTL" create namespace monitoring >/dev/null 2>&1 || true
+# monitoring.yaml creates the monitoring Namespace itself and sets
+# namespace: monitoring on each of its other objects.
 "$KUBECTL" apply -f "$ROOT/k8s/monitoring.yaml"
 
 if [ "$ROLLOUT_WAIT" = "0" ]; then

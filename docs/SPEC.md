@@ -51,7 +51,7 @@ All of it runs and is tested inside Docker.
    - `prometheus.yml`: in-cluster Kubernetes SD in 0.20 syntax (`api_servers`, `in_cluster`, relabelling on `__meta_kubernetes_role`) for the apiserver, nodes, annotated pods and annotated services.
    - `alert_rules.yml`: 0.x rule syntax (`ALERT … IF … FOR … LABELS … ANNOTATIONS`). The file is referenced today but missing.
    - `prometheus-local.yml`: the Docker Compose variant, which scrapes `platform-app` statically and discovers the local apiserver through Kubernetes SD.
-9. **Monitoring stack manifest (`k8s/monitoring.yaml`).** Creates the `monitoring` Namespace, a ConfigMap whose content is kept byte-identical to `prometheus/prometheus.yml` and `prometheus/alert_rules.yml` by a test, a Prometheus 0.20.0 Deployment, and a NodePort Service on 30090.
+9. **Monitoring stack manifest (`k8s/monitoring.yaml`).** Creates the `monitoring` Namespace, a ConfigMap whose content is kept byte-identical to `prometheus/prometheus.yml` and `prometheus/alert_rules.yml` by a test, a Prometheus 0.20.0 Deployment, and a NodePort Service on 30090. Kubernetes 1.2 accepts only DNS-subdomain ConfigMap keys (no underscores), so the rules are stored under the key `alert-rules.yml` and the config volume's `items` mount that key at `alert_rules.yml`, the path `prometheus.yml` references.
 10. **Local runnable stack (`docker-compose.yml`, file format v2):**
     - etcd 2.2.5
     - kube-apiserver 1.2.6, plus kube-controller-manager and kube-scheduler 1.2.6 in the apiserver's network namespace (`network_mode: "service:apiserver"`, `--master=http://127.0.0.1:8080`). kube-apiserver 1.2 health-checks them at the hard-coded `127.0.0.1:10252` and `127.0.0.1:10251`.
@@ -296,7 +296,7 @@ No existing file is deleted. The two chart files move from `helm/` to `helm/plat
   - The strategy is RollingUpdate with surge 1 and unavailable 0.
   - The Prometheus annotations are present.
   - No `latest` image tags, and no `NODE_ENV` env var.
-  - The `k8s/monitoring.yaml` ConfigMap data is byte-equal to `prometheus/prometheus.yml` and `prometheus/alert_rules.yml`.
+  - The `k8s/monitoring.yaml` ConfigMap data is byte-equal to `prometheus/prometheus.yml` and `prometheus/alert_rules.yml` (keys `prometheus.yml` and `alert-rules.yml`), and every ConfigMap key in `k8s/` is valid on 1.2.
 - **Script unit tests** (bats 0.4.0 with stubbed `kubectl`, `helm` and `docker`):
   - argument sequences
   - idempotency on "already exists"

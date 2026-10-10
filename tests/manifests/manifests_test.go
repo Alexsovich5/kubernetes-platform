@@ -4,6 +4,7 @@ package manifests
 import (
 	"io/ioutil"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -91,6 +92,8 @@ func (o object) namespace() string {
 }
 
 // splitDocuments splits a multi-document YAML file on "\n---" separators.
+// Like kubectl, it drops the newline in front of each separator, so a literal
+// block that ends a document loses its final newline.
 func splitDocuments(data string) []string {
 	var docs []string
 	for _, part := range strings.Split("\n"+data, "\n---") {
@@ -163,6 +166,9 @@ func TestSplitDocumentsHandlesSeparatorsAndComments(t *testing.T) {
 	docs := splitDocuments("# header\n\nkind: A\n---\nkind: B\n---\n# only a comment\n")
 	if len(docs) != 2 {
 		t.Fatalf("got %d documents, want 2: %q", len(docs), docs)
+	}
+	if !strings.HasSuffix(docs[0], "kind: A") {
+		t.Errorf("first document %q, want the newline before --- dropped", docs[0])
 	}
 }
 
@@ -314,5 +320,189 @@ func TestConfigMapVolumesReferenceDefinedConfigMaps(t *testing.T) {
 				t.Errorf("Deployment %s volume %s references ConfigMap %s, which k8s/ does not define", d.Metadata.Name, v.Name, key)
 			}
 		}
+	}
+}
+
+// monitoringObject is one document of k8s/monitoring.yaml, with the fields
+// the shared object type drops (ConfigMap data, container args, Service ports).
+type monitoringObject struct {
+	Kind     string            `yaml:"kind"`
+	Metadata objectMeta        `yaml:"metadata"`
+	Data     map[string]string `yaml:"data"`
+	Spec     struct {
+		Replicas int    `yaml:"replicas"`
+		Type     string `yaml:"type"`
+		Ports    []struct {
+			Port     int `yaml:"port"`
+			NodePort int `yaml:"nodePort"`
+		} `yaml:"ports"`
+		Template struct {
+			Spec struct {
+				Containers []struct {
+					Image string   `yaml:"image"`
+					Args  []string `yaml:"args"`
+				} `yaml:"containers"`
+				Volumes []struct {
+					Name      string `yaml:"name"`
+					ConfigMap *struct {
+						Name  string `yaml:"name"`
+						Items []struct {
+							Key  string `yaml:"key"`
+							Path string `yaml:"path"`
+						} `yaml:"items"`
+					} `yaml:"configMap"`
+				} `yaml:"volumes"`
+			} `yaml:"spec"`
+		} `yaml:"template"`
+	} `yaml:"spec"`
+}
+
+// monitoringObjects returns the documents of k8s/monitoring.yaml in file order.
+func monitoringObjects(t *testing.T) []monitoringObject {
+	data, err := ioutil.ReadFile(filepath.Join(manifestDir, "monitoring.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var objs []monitoringObject
+	for i, doc := range splitDocuments(string(data)) {
+		var o monitoringObject
+		if err := yaml.Unmarshal([]byte(doc), &o); err != nil {
+			t.Fatalf("monitoring.yaml document %d: %v", i, err)
+		}
+		objs = append(objs, o)
+	}
+	return objs
+}
+
+func monitoringObjectOfKind(t *testing.T, objs []monitoringObject, kind string) monitoringObject {
+	for _, o := range objs {
+		if o.Kind == kind {
+			return o
+		}
+	}
+	t.Fatalf("monitoring.yaml has no %s", kind)
+	return monitoringObject{}
+}
+
+func TestMonitoringNamespaceIsTheFirstDocument(t *testing.T) {
+	objs := monitoringObjects(t)
+	if len(objs) == 0 || objs[0].Kind != "Namespace" || objs[0].Metadata.Name != "monitoring" {
+		t.Fatalf("first document of monitoring.yaml must be Namespace monitoring")
+	}
+}
+
+// monitoringConfigKeys maps each file under prometheus/ to the ConfigMap key
+// that holds it. Kubernetes 1.2 accepts only DNS-subdomain ConfigMap keys, so
+// alert_rules.yml is stored as alert-rules.yml and the volume items map it
+// back to the file name prometheus.yml's rule_files expects.
+var monitoringConfigKeys = map[string]string{
+	"prometheus.yml":  "prometheus.yml",
+	"alert_rules.yml": "alert-rules.yml",
+}
+
+// configMapKey is the Kubernetes 1.2 ConfigMap key rule (a DNS subdomain
+// with an optional leading dot).
+var configMapKey = regexp.MustCompile(`^\.?[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`)
+
+func TestConfigMapKeysAreValidOnKubernetes12(t *testing.T) {
+	files, err := filepath.Glob(filepath.Join(manifestDir, "*.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range files {
+		data, err := ioutil.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i, doc := range splitDocuments(string(data)) {
+			var o struct {
+				Kind string            `yaml:"kind"`
+				Data map[string]string `yaml:"data"`
+			}
+			if err := yaml.Unmarshal([]byte(doc), &o); err != nil {
+				t.Fatalf("%s document %d: %v", f, i, err)
+			}
+			for k := range o.Data {
+				if len(k) > 253 || !configMapKey.MatchString(k) {
+					t.Errorf("%s %s: key %q is not a DNS subdomain", filepath.Base(f), o.Kind, k)
+				}
+			}
+		}
+	}
+}
+
+func TestMonitoringConfigMapMatchesPrometheusFiles(t *testing.T) {
+	cm := monitoringObjectOfKind(t, monitoringObjects(t), "ConfigMap")
+	if cm.Metadata.Name != "prometheus-config" {
+		t.Fatalf("ConfigMap name %q, want prometheus-config", cm.Metadata.Name)
+	}
+	for file, key := range monitoringConfigKeys {
+		want, err := ioutil.ReadFile(filepath.Join("../../prometheus", file))
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, ok := cm.Data[key]
+		if !ok {
+			t.Errorf("ConfigMap has no key %s", key)
+			continue
+		}
+		if got != string(want) {
+			t.Errorf("ConfigMap key %s differs from prometheus/%s; regenerate k8s/monitoring.yaml", key, file)
+		}
+	}
+	if len(cm.Data) != len(monitoringConfigKeys) {
+		t.Errorf("ConfigMap has %d keys, want exactly %d", len(cm.Data), len(monitoringConfigKeys))
+	}
+}
+
+func TestMonitoringConfigVolumeMountsEachKeyAtItsFileName(t *testing.T) {
+	d := monitoringObjectOfKind(t, monitoringObjects(t), "Deployment")
+	var items map[string]string
+	for _, v := range d.Spec.Template.Spec.Volumes {
+		if v.ConfigMap != nil && v.ConfigMap.Name == "prometheus-config" {
+			items = map[string]string{}
+			for _, it := range v.ConfigMap.Items {
+				items[it.Key] = it.Path
+			}
+		}
+	}
+	if items == nil {
+		t.Fatal("Deployment prometheus has no prometheus-config volume")
+	}
+	if len(items) != len(monitoringConfigKeys) {
+		t.Errorf("volume items %v, want one per ConfigMap key", items)
+	}
+	for file, key := range monitoringConfigKeys {
+		if items[key] != file {
+			t.Errorf("volume item for key %s has path %q, want %s", key, items[key], file)
+		}
+	}
+}
+
+func TestMonitoringPrometheusImageAndArgs(t *testing.T) {
+	d := monitoringObjectOfKind(t, monitoringObjects(t), "Deployment")
+	if d.Spec.Replicas != 1 {
+		t.Errorf("replicas %d, want 1", d.Spec.Replicas)
+	}
+	cs := d.Spec.Template.Spec.Containers
+	if len(cs) != 1 {
+		t.Fatalf("got %d containers, want 1", len(cs))
+	}
+	if strings.Contains(cs[0].Image, ":v1.") {
+		t.Errorf("image %q uses a v1.x Prometheus tag", cs[0].Image)
+	}
+	if cs[0].Image != "prom/prometheus:0.20.0" {
+		t.Errorf("image %q, want prom/prometheus:0.20.0", cs[0].Image)
+	}
+	want := []string{"-config.file=/etc/prometheus/prometheus.yml", "-storage.local.path=/prometheus"}
+	if strings.Join(cs[0].Args, " ") != strings.Join(want, " ") {
+		t.Errorf("args %v, want %v", cs[0].Args, want)
+	}
+}
+
+func TestMonitoringServiceIsNodePort30090(t *testing.T) {
+	s := monitoringObjectOfKind(t, monitoringObjects(t), "Service")
+	if s.Spec.Type != "NodePort" || len(s.Spec.Ports) != 1 || s.Spec.Ports[0].NodePort != 30090 || s.Spec.Ports[0].Port != 9090 {
+		t.Errorf("Service spec %+v, want NodePort 9090 -> 30090", s.Spec)
 	}
 }

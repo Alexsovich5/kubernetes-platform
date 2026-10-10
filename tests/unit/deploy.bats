@@ -51,6 +51,13 @@ calls() {
   [ "$(calls apply | grep -c ' -f /')" -eq 4 ]
 }
 
+@test "the monitoring namespace comes from monitoring.yaml, not a separate create" {
+  run "$DEPLOY" team-a
+  [ "$status" -eq 0 ]
+  [ -z "$(grep 'namespace monitoring' "$STUB_LOG")" ]
+  grep -q 'apply -f /.*/k8s/monitoring.yaml' "$STUB_LOG"
+}
+
 @test "ROLLOUT_WAIT=0 skips polling" {
   STUB_KUBECTL_JSONPATH="1 2 0 0 3" ROLLOUT_WAIT=0 run "$DEPLOY" team-a
   [ "$status" -eq 0 ]
