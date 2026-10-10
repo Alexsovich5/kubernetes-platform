@@ -24,7 +24,7 @@ COMPOSE    := docker compose -p kubernetes-platform
 
 DOCKER_RUN := docker run --rm -e OFFLINE -v $(CURDIR):$(REPO) -w $(REPO)
 
-.PHONY: preflight fetch helm-image tools-image test ci-unit shell vendor lock-check build up down integration
+.PHONY: preflight fetch helm-image tools-image test ci-unit shell vendor lock-check build up down integration test-all
 
 preflight:
 	docker system df
@@ -126,6 +126,11 @@ integration:
 	if [ "$$status" = 0 ]; then $(COMPOSE) run --rm tools bats tests/integration/alerts || status=$$?; fi; \
 	$(COMPOSE) down -v; \
 	exit $$status
+
+# Runs the unit suite, then the integration suites against a fresh stack.
+test-all:
+	$(MAKE) test
+	$(MAKE) integration
 
 shell: tools-image
 	$(DOCKER_RUN) -it $(TOOLS_IMAGE) bash
