@@ -149,6 +149,8 @@ HTTP:
 - `GET /health` → `200 ok` or `503 draining`
 - `GET /metrics` → Prometheus text format: `http_requests_total{handler,method,code}` and the `http_request_duration_microseconds` summary from `prometheus.InstrumentHandler`, plus the Go and process collectors.
 
+The server (`pkg/app/httpserver.go`, `NewHTTPServer`) sets a 10 s read timeout, a 10 s write timeout and a 64 KiB header limit, so slow or stalled clients cannot hold connections open indefinitely.
+
 **Helm values (`helm/platform/values.yaml`, alpha.2, top-level):**
 
 ```yaml
@@ -192,11 +194,21 @@ ALERT PlatformAppHighErrorRate
   FOR 5m
   LABELS { severity = "warning" }
   ANNOTATIONS { summary = "platform-app 5xx ratio above 5%" }
+
+ALERT PlatformAppAbsent
+  IF absent(up{job="platform-app"})
+  FOR 5m
+  LABELS { severity = "page" }
+  ANNOTATIONS { summary = "no platform-app target is being scraped" }
 ```
+
+`up == 0` exists only while a target is still discovered, so `PlatformAppAbsent` fires when every platform-app target disappears (all pods gone, discovery failing) instead of letting `PlatformAppDown` resolve. Every `job="…"` a rule file selects must be a job the loading config scrapes (`tests/manifests/prometheus_test.go`). In `prometheus.yml` the annotated pods labelled `app=platform` are scraped by their own `platform-app` job and dropped from `kubernetes-pods`, so the same rules work in the cluster and in Compose.
 
 `prometheus-local.yml` uses `scrape_interval: 5s` and `evaluation_interval: 5s`, and loads `alert_rules_local.yml`, a copy of the rules with `FOR 10s`, so the integration test finishes quickly.
 
 **Kubeconfig for tools and Tiller (`build/kubeconfig`):** a single cluster `local` with `server: http://apiserver:8080`, no auth. This is the 1.2 insecure port, and only the Compose network can reach it.
+
+**Published ports:** Compose publishes only `app` (`127.0.0.1:20180` → 8080) and Prometheus (`127.0.0.1:20190` → 9090), both on the host loopback interface. etcd, the apiserver (with the controller-manager and scheduler in its network namespace) and Tiller serve without authentication and publish no host port. `tests/manifests/compose_test.go` checks `docker-compose.yml` and the output of `docker compose config` (rendered on the host by `make compose-config`), and `make ports-check` checks the running stack during `make integration`.
 
 ## Stack & pinned versions
 
@@ -236,7 +248,7 @@ Binary downloads (fetched on the host by `make fetch`, listed with their sha256 
 | `prometheus-0.20.0.linux-amd64.tar.gz` | `https://github.com/prometheus/prometheus/releases/download/0.20.0/prometheus-0.20.0.linux-amd64.tar.gz` | `660ba94efb1f4cff4934dc55bfe1b920f9bc4630bf731de4a67599b048c42c5c` |
 | `glide-v0.11.1-linux-amd64.tar.gz` | `https://github.com/Masterminds/glide/releases/download/v0.11.1/glide-v0.11.1-linux-amd64.tar.gz` | `de0c7870738c6bc11128761d53a99ad68687b0a213fe52cea15ad05d93f10e42` |
 | `bats-v0.4.0.tar.gz` | `https://github.com/sstephenson/bats/archive/v0.4.0.tar.gz` | `480d8d64f1681eee78d1002527f3f06e1ac01e173b761bc73d0cf33f4dc1d8d7` |
-| `ca-certificates_20141019+deb8u4_all.deb` | `http://snapshot.debian.org/archive/debian-security/20180707T093525Z/pool/updates/main/c/ca-certificates/ca-certificates_20141019%2Bdeb8u4_all.deb` | `df55d3ec4f25868d367471411be80a3a117d152419f505068893bfc0f76fa817` |
+| `ca-certificates_20141019+deb8u4_all.deb` | `https://snapshot.debian.org/archive/debian-security/20180707T093525Z/pool/updates/main/c/ca-certificates/ca-certificates_20141019%2Bdeb8u4_all.deb` | `df55d3ec4f25868d367471411be80a3a117d152419f505068893bfc0f76fa817` |
 
 - **Build-time trust store (a documented exception to the period rule).** `golang:1.6.3` ships jessie `ca-certificates 20141019+deb8u1`, which lacks `ISRG_Root_X1`. Today's GitHub release-asset and git endpoints chain to roots that store may not trust. `glide install` (T2, T9) and `git clone` (T9) run inside the images over HTTPS. Both `build/tools/Dockerfile` and `build/helm/Dockerfile` therefore `dpkg -i` the jessie package `20141019+deb8u4` (first seen on snapshot.debian.org on 2018-07-07; it contains `ISRG_Root_X1.crt`) before any HTTPS access. This package is post-period. It affects only which roots the build trusts, never the project's code or runtime dependencies. The T1 harness test checks HTTPS from inside the image. When T1 was built, `curl https://github.com/` and `git ls-remote` against GitHub also succeeded with the stock bundle, so the update is a precaution against root changes rather than a fix for an observed failure.
 - Helm alpha.2 binaries are gone: GCS `kubernetes-helm` returns 403, `get.helm.sh` returns 404, and the GitHub release has no assets. `build/helm/Dockerfile` builds them from `git clone --branch v2.0.0-alpha.2 https://github.com/helm/helm $GOPATH/src/k8s.io/helm` with `glide install`.

@@ -43,4 +43,16 @@ wait_for_value() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"PlatformAppDown"* ]]
   [[ "$output" == *"PlatformAppHighErrorRate"* ]]
+  [[ "$output" == *"PlatformAppAbsent"* ]]
+}
+
+@test "PlatformAppAbsent stays inactive while the app target is scraped" {
+  wait_for_value 'up{job="platform-app"}' 1 60
+  sleep 15
+  # Prometheus 0.x keeps writing ALERTS samples with value 0 for a while after
+  # an alert turns inactive (it is briefly pending before the first scrape),
+  # so only samples with value 1 mean the alert is active.
+  run query_value 'count(ALERTS{alertname="PlatformAppAbsent"} == 1)'
+  echo "active PlatformAppAbsent samples: '$output'"
+  [ -z "$output" ]
 }

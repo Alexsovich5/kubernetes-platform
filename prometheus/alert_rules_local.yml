@@ -9,3 +9,9 @@ ALERT PlatformAppHighErrorRate
   FOR 10s
   LABELS { severity = "warning" }
   ANNOTATIONS { summary = "platform-app 5xx ratio above 5%" }
+
+ALERT PlatformAppAbsent
+  IF absent(up{job="platform-app"})
+  FOR 10s
+  LABELS { severity = "page" }
+  ANNOTATIONS { summary = "no platform-app target is being scraped" }

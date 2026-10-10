@@ -3,7 +3,6 @@ package main
 
 import (
 	"log"
-	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
@@ -43,5 +42,5 @@ func main() {
 	go app.RunDrain(srv, ch, time.Duration(drainSeconds)*time.Second, os.Exit)
 
 	log.Printf("platform-app %s listening on %s (config %s, drain %ds)", version, addr, configDir, drainSeconds)
-	log.Fatal(http.ListenAndServe(addr, srv.Handler()))
+	log.Fatal(app.NewHTTPServer(addr, srv.Handler()).ListenAndServe())
 }

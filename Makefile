@@ -12,7 +12,7 @@ SA_DIR       := /var/run/secrets/kubernetes.io/serviceaccount
 FETCH_LIST := \
 	bats-v0.4.0.tar.gz^https://github.com/sstephenson/bats/archive/v0.4.0.tar.gz \
 	glide-v0.11.1-linux-amd64.tar.gz^https://github.com/Masterminds/glide/releases/download/v0.11.1/glide-v0.11.1-linux-amd64.tar.gz \
-	ca-certificates_20141019+deb8u4_all.deb^http://snapshot.debian.org/archive/debian-security/20180707T093525Z/pool/updates/main/c/ca-certificates/ca-certificates_20141019%2Bdeb8u4_all.deb \
+	ca-certificates_20141019+deb8u4_all.deb^https://snapshot.debian.org/archive/debian-security/20180707T093525Z/pool/updates/main/c/ca-certificates/ca-certificates_20141019%2Bdeb8u4_all.deb \
 	etcd-v2.2.5-linux-amd64.tar.gz^https://github.com/etcd-io/etcd/releases/download/v2.2.5/etcd-v2.2.5-linux-amd64.tar.gz \
 	kube-apiserver^https://storage.googleapis.com/kubernetes-release/release/v1.2.6/bin/linux/amd64/kube-apiserver \
 	kube-controller-manager^https://storage.googleapis.com/kubernetes-release/release/v1.2.6/bin/linux/amd64/kube-controller-manager \
@@ -24,7 +24,7 @@ COMPOSE    := docker compose -p kubernetes-platform
 
 DOCKER_RUN := docker run --rm -e OFFLINE -v $(CURDIR):$(REPO) -w $(REPO)
 
-.PHONY: preflight fetch helm-image tools-image test ci-unit shell vendor lock-check build up down integration test-all
+.PHONY: preflight fetch helm-image tools-image compose-config ports-check test ci-unit shell vendor lock-check build up down integration test-all
 
 preflight:
 	docker system df
@@ -69,7 +69,16 @@ tools-image: fetch helm-image
 		echo "tools-image: build failed (attempt $$attempt)" >&2; sleep 5; \
 	done; exit 1
 
-test: preflight fetch helm-image tools-image
+# Renders the Compose file as the engine will apply it, for the published
+# port checks in tests/manifests/compose_test.go. Runs on the host because
+# the tools image has no Compose.
+compose-config:
+	@mkdir -p $(CACHE)
+	rm -f $(CACHE)/compose-config.yml
+	$(COMPOSE) config > $(CACHE)/compose-config.yml.part
+	mv $(CACHE)/compose-config.yml.part $(CACHE)/compose-config.yml
+
+test: preflight fetch helm-image tools-image compose-config
 	$(DOCKER_RUN) $(TOOLS_IMAGE) make -f Makefile ci-unit
 
 # Runs inside the tools image.
@@ -114,6 +123,19 @@ up: fetch helm-image tools-image
 down:
 	$(COMPOSE) down
 
+# Host-side check on the running stack: app and Prometheus are published on
+# 127.0.0.1 only, and the unauthenticated apiserver, etcd and Tiller ports
+# are not published at all.
+ports-check:
+	test "$$($(COMPOSE) port app 8080)" = "127.0.0.1:20180"
+	test "$$($(COMPOSE) port prometheus 9090)" = "127.0.0.1:20190"
+	@for svc_port in apiserver:8080 etcd:2379 tiller:44134; do \
+		svc=$${svc_port%%:*}; port=$${svc_port#*:}; \
+		out=$$($(COMPOSE) port $$svc $$port 2>/dev/null); \
+		if [ -n "$$out" ]; then echo "ports-check: $$svc $$port is published on $$out" >&2; exit 1; fi; \
+	done
+	@echo "ports-check: only loopback ports are published"
+
 # Runs the bats integration suites on the Compose network and always tears
 # the stack down afterwards. Only this project's containers, networks and
 # anonymous volumes are removed; nothing is pruned.
@@ -121,6 +143,7 @@ integration:
 	@status=0; \
 	$(MAKE) up || status=$$?; \
 	if [ "$$status" = 0 ]; then $(COMPOSE) run --rm tools bash -c '. tests/integration/helpers.bash && wait_for_url http://app:8080/health 60 && wait_for_url http://apiserver:8080/healthz 90 && wait_for_url http://prometheus:9090/api/v1/query?query=up 60' || status=$$?; fi; \
+	if [ "$$status" = 0 ]; then $(MAKE) ports-check || status=$$?; fi; \
 	if [ "$$status" = 0 ]; then $(COMPOSE) run --rm tools bats tests/integration || status=$$?; fi; \
 	if [ "$$status" = 0 ]; then $(COMPOSE) stop app || status=$$?; fi; \
 	if [ "$$status" = 0 ]; then $(COMPOSE) run --rm tools bats tests/integration/alerts || status=$$?; fi; \

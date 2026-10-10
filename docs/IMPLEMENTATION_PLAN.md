@@ -1,6 +1,6 @@
 # kubernetes-platform: Implementation Plan
 
-This plan implements `docs/SPEC.md`. There are 14 tasks and each task is one commit. After every task, `make test` passes. From T4 on, `make integration` also passes.
+This plan implements `docs/SPEC.md`. There are 15 tasks and each task is one commit. After every task, `make test` passes. From T4 on, `make integration` also passes.
 
 ## Conventions for every task
 
@@ -425,3 +425,23 @@ This plan implements `docs/SPEC.md`. There are 14 tasks and each task is one com
 - **Commit:** `Rewrite README from template with honest status and layout`
   > Describe what is implemented, what is simulated and what is out of
   > scope, with a file layout generated from git ls-files.
+
+## T15 — Security and hygiene hardening
+
+- **Goal:** Review the whole repository for security, ops-correctness and hygiene problems and fix them.
+- **Found and changed:**
+  - **Published ports listened on every host interface (major).** `docker-compose.yml` published `"20180:8080"` and `"20190:9090"`, so the app and the unauthenticated Prometheus were reachable from the network. Both are now `127.0.0.1:<port>:<port>`. etcd, the insecure apiserver port (and the controller-manager and scheduler in its namespace) and Tiller stay unpublished.
+    - `tests/manifests/compose_test.go` parses `docker-compose.yml` and the output of `docker compose config` (short and long port syntax). It fails on any published port without the `127.0.0.1` prefix, any host port outside 20100–20199, any published port on etcd/apiserver/controller-manager/scheduler/tiller, and `network_mode: host`. Checker fixtures cover the rejected and accepted forms.
+    - New Makefile target `compose-config` renders the Compose file on the host into `build/cache/compose-config.yml`. `make test` runs it before `ci-unit`.
+    - New Makefile target `ports-check`, run by `make integration` after readiness, checks with `docker compose port` that app and Prometheus are published on `127.0.0.1:20180` and `127.0.0.1:20190` and that apiserver, etcd and Tiller are not published.
+  - **In-cluster alert rules could never fire (major).** `alert_rules.yml` selects `job="platform-app"`, but `prometheus.yml` scraped platform pods under `kubernetes-pods`, so the in-cluster rules matched nothing and a dead app looked healthy. `prometheus.yml` now has a `platform-app` job (annotated pods labelled `app=platform`), and `kubernetes-pods` drops those pods so they are scraped once. The `k8s/monitoring.yaml` ConfigMap is regenerated.
+    - `tests/manifests/prometheus_test.go` checks that every `job="…"` a rule file selects is scraped by the config that loads it, and that the cluster config keeps and drops the right pods.
+  - **Alerts resolved when the app disappeared (major).** `PlatformAppDown` (`up == 0`) resolves when every target vanishes from discovery. Both rule files now have `PlatformAppAbsent` on `absent(up{job="platform-app"})`, with `FOR 5m` in the cluster and `FOR 10s` locally.
+    - Tests: the prometheus_test.go rule check; `tests/unit/prometheus.bats` now expects 3 rules per file; `tests/integration/prometheus.bats` checks that the rule is loaded and stays inactive while the app is scraped.
+  - **No HTTP server timeouts (minor).** `platform-app` used `http.ListenAndServe`, so slow or stalled clients could hold connections forever. New `pkg/app/httpserver.go` `NewHTTPServer` sets a 10 s read timeout, a 10 s write timeout and a 64 KiB header limit, and `main.go` uses it. Tested by `pkg/app/httpserver_test.go`.
+  - **CA bundle fetched over plain HTTP (minor).** The `ca-certificates` deb URL in `make fetch` (and the SPEC table) now uses `https://snapshot.debian.org`. It was already sha256-pinned.
+    - `tests/unit/sources.bats` fails if a fetch URL is not https, if a fetched file has no `SHA256SUMS` entry, or if any Dockerfile uses `http://`, apt verification bypasses (`--allow-unauthenticated`, `--force-yes`, `[trusted=yes]`, `AllowUnauthenticated`, `--no-check-gpg`), `--no-check-certificate`/`--insecure`, or downloads with curl, wget or `ADD <url>`.
+  - **Secrets audit:** no credentials, tokens or keys exist in the repository, the app's logs or its responses. The kubeconfig has no user credentials, and the only secret paths are the in-cluster service-account mounts that Prometheus reads. Nothing to mask.
+  - README Status, limitations (app, Prometheus, etcd and Tiller have no authentication; the NodePort 30090 exposure in a real cluster) and Layout are updated. SPEC is updated with the rules, the server limits and the published ports.
+- **Acceptance:** `make test && make integration`
+- **Commit:** `Bind published ports to loopback and harden alerting`

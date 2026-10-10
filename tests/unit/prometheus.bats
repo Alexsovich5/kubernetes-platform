@@ -27,13 +27,13 @@ setup() {
 @test "alert_rules.yml passes promtool check-rules" {
   run promtool check-rules prometheus/alert_rules.yml
   [ "$status" -eq 0 ]
-  [[ "$output" == *"SUCCESS: 2 rules found"* ]]
+  [[ "$output" == *"SUCCESS: 3 rules found"* ]]
 }
 
 @test "alert_rules_local.yml passes promtool check-rules" {
   run promtool check-rules prometheus/alert_rules_local.yml
   [ "$status" -eq 0 ]
-  [[ "$output" == *"SUCCESS: 2 rules found"* ]]
+  [[ "$output" == *"SUCCESS: 3 rules found"* ]]
 }
 
 @test "check-config rejects a config whose rule file is missing" {
