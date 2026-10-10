@@ -1,0 +1,6 @@
+#!/bin/bash
+# Test double for docker. Appends its arguments as one line to
+# $STUB_DOCKER_LOG (default: /dev/null) and succeeds without output.
+
+echo "$*" >> "${STUB_DOCKER_LOG:-/dev/null}"
+exit 0

@@ -3,6 +3,10 @@
 #
 #   get namespace <name>   succeeds only if <name> is listed in
 #                          $STUB_NAMESPACES (space-separated)
+#   get serviceaccount <name> ...
+#                          succeeds only if <name> is listed in
+#                          $STUB_SERVICEACCOUNTS (space-separated)
+#   ... -f - ...           also appends standard input to $STUB_LOG
 #   ... -o jsonpath=...    prints $STUB_KUBECTL_JSONPATH
 #   anything else          succeeds without output
 
@@ -18,6 +22,25 @@ if [ "$1" = "get" ] && [ "$2" = "namespace" ]; then
   echo "Error from server: namespaces \"$3\" not found" >&2
   exit 1
 fi
+
+if [ "$1" = "get" ] && [ "$2" = "serviceaccount" ]; then
+  for sa in ${STUB_SERVICEACCOUNTS:-}; do
+    if [ "$sa" = "$3" ]; then
+      echo "$3   1"
+      exit 0
+    fi
+  done
+  echo "Error from server: serviceaccounts \"$3\" not found" >&2
+  exit 1
+fi
+
+prev=""
+for arg in "$@"; do
+  if [ "$prev" = "-f" ] && [ "$arg" = "-" ]; then
+    cat >> "$STUB_LOG"
+  fi
+  prev="$arg"
+done
 
 for arg in "$@"; do
   case "$arg" in
