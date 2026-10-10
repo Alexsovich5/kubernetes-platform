@@ -1,0 +1,57 @@
+#!/usr/bin/env bats
+#
+# Runs scripts/deploy.sh against the kubelet-less control plane in the
+# it-deploy namespace. The first test's setup removes any leftover namespace
+# and the last test's teardown deletes it.
+
+load helpers
+
+NS=it-deploy
+LAST_TEST=2
+
+namespace_absent() {
+  ! kubectl get namespace "$NS" >/dev/null 2>&1
+}
+
+wait_namespace_absent() {
+  local i=0
+  while [ "$i" -lt 60 ]; do
+    namespace_absent && return 0
+    sleep 1
+    i=$((i + 1))
+  done
+  echo "namespace $NS still present after 60s" >&2
+  return 1
+}
+
+setup() {
+  wait_for_url "http://apiserver:8080/healthz" 60
+  if [ "$BATS_TEST_NUMBER" -eq 1 ]; then
+    kubectl delete namespace "$NS" >/dev/null 2>&1 || true
+    wait_namespace_absent
+  fi
+}
+
+teardown() {
+  if [ "$BATS_TEST_NUMBER" -eq "$LAST_TEST" ]; then
+    kubectl delete namespace "$NS" >/dev/null 2>&1 || true
+  fi
+}
+
+@test "ROLLOUT_WAIT=0 deploy.sh creates the namespace, Deployment and Services" {
+  ROLLOUT_WAIT=0 run scripts/deploy.sh "$NS"
+  echo "$output"
+  [ "$status" -eq 0 ]
+  kubectl get namespace "$NS"
+  kubectl --namespace="$NS" get configmap platform-config
+  kubectl --namespace="$NS" get deployment platform-app
+  kubectl --namespace="$NS" get service platform-app platform-internal
+  kubectl --namespace=monitoring get deployment prometheus
+}
+
+@test "deploy.sh exits 2 when the rollout cannot finish (no nodes)" {
+  ROLLOUT_TIMEOUT=5 run scripts/deploy.sh "$NS"
+  echo "$output"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"rollout timed out"* ]]
+}

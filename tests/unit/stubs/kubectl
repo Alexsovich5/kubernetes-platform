@@ -1,0 +1,31 @@
+#!/bin/bash
+# Test double for kubectl. Appends its arguments as one line to $STUB_LOG.
+#
+#   get namespace <name>   succeeds only if <name> is listed in
+#                          $STUB_NAMESPACES (space-separated)
+#   ... -o jsonpath=...    prints $STUB_KUBECTL_JSONPATH
+#   anything else          succeeds without output
+
+echo "$*" >> "${STUB_LOG:?STUB_LOG must be set}"
+
+if [ "$1" = "get" ] && [ "$2" = "namespace" ]; then
+  for ns in ${STUB_NAMESPACES:-}; do
+    if [ "$ns" = "$3" ]; then
+      echo "$3   Active"
+      exit 0
+    fi
+  done
+  echo "Error from server: namespaces \"$3\" not found" >&2
+  exit 1
+fi
+
+for arg in "$@"; do
+  case "$arg" in
+    jsonpath=*|-ojsonpath=*)
+      printf '%s' "${STUB_KUBECTL_JSONPATH:-}"
+      exit 0
+      ;;
+  esac
+done
+
+exit 0
