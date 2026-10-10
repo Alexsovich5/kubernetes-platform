@@ -266,7 +266,7 @@ This plan implements `docs/SPEC.md`. There are 14 tasks and each task is one com
     - one single `RUN` that does all of the following, so the sources and caches never persist in a layer:
       - `git clone --branch v2.0.0-alpha.2 https://github.com/helm/helm /go/src/k8s.io/helm`
       - rewrite the `bitbucket.org/ww/goautoneg` entry in `glide.lock` to `repo: https://github.com/munnerz/goautoneg`, `vcs: git`, `version: a547fc61f48d567d5b4ec6f8aee5573d8efce11d`
-      - `glide install`
+      - `glide install`, retried up to 5 times inside the same `RUN` (glide clones dependencies in parallel and single clones fail intermittently over the network; repositories already fetched are reused)
       - `go install k8s.io/helm/cmd/helm k8s.io/helm/cmd/tiller`
       - `rm -rf /go/src/* /go/pkg ~/.glide`
   - modify `build/tools/Dockerfile`: `FROM kubernetes-platform:helm-v2.0.0-alpha.2`, then `RUN helm init --client-only` so `$HELM_HOME` exists
@@ -276,6 +276,7 @@ This plan implements `docs/SPEC.md`. There are 14 tasks and each task is one com
     - set `HELM_HOST=tiller:44134` on `tools`
   - create `tests/integration/helm.bats` (smoke part)
   - modify `tests/unit/harness.bats`
+  - modify `tests/integration/scripts.bats`: drop the helm stub, so the setup-cluster test runs the real `helm init --client-only`
 - **Tests to write first:**
   - Unit: the output of `helm version` equals `v2.0.0-alpha.2`. alpha.2 prints only the client version and has no `--client` flag.
   - Integration:

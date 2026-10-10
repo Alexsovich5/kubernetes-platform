@@ -21,6 +21,7 @@ services:
     working_dir: /go/src/github.com/Alexsovich5/kubernetes-platform
     environment:
       KUBECONFIG: /go/src/github.com/Alexsovich5/kubernetes-platform/build/kubeconfig
+      HELM_HOST: tiller:44134
     networks:
       - kp
 
@@ -71,6 +72,25 @@ services:
     command:
       - kube-scheduler
       - --master=http://127.0.0.1:8080
+
+  # Tiller keeps releases in memory and installs them into production.
+  tiller:
+    image: kubernetes-platform:tools-2016
+    entrypoint: []
+    depends_on:
+      - apiserver
+    volumes:
+      - .:/go/src/github.com/Alexsovich5/kubernetes-platform:ro
+    environment:
+      KUBECONFIG: /go/src/github.com/Alexsovich5/kubernetes-platform/build/kubeconfig
+    command:
+      - tiller
+      - --listen
+      - :44134
+      - --namespace
+      - production
+    networks:
+      - kp
 
 networks:
   kp:

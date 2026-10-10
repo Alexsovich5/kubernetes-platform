@@ -1,4 +1,4 @@
-FROM golang:1.6.3@sha256:9bc3717d167110a13be0ca34936a1d2d509f1775499649a6be616330ab20dbd1
+FROM kubernetes-platform:helm-v2.0.0-alpha.2
 
 WORKDIR /tmp/build
 COPY SHA256SUMS /tmp/build/SHA256SUMS
@@ -35,5 +35,8 @@ RUN cd cache \
  && grep -E '  (kube-apiserver|kube-controller-manager|kube-scheduler|kubectl)$' ../SHA256SUMS | sha256sum -c - \
  && install -m 0755 kube-apiserver kube-controller-manager kube-scheduler kubectl /usr/local/bin/ \
  && cd / && rm -rf /tmp/build
+
+# Create $HELM_HOME without installing Tiller.
+RUN helm init --client-only
 
 WORKDIR /go

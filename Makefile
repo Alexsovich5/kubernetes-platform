@@ -1,6 +1,7 @@
 REPO         := /go/src/github.com/Alexsovich5/kubernetes-platform
 GOLANG_IMAGE := golang:1.6.3@sha256:9bc3717d167110a13be0ca34936a1d2d509f1775499649a6be616330ab20dbd1
 TOOLS_IMAGE  := kubernetes-platform:tools-2016
+HELM_IMAGE   := kubernetes-platform:helm-v2.0.0-alpha.2
 CACHE        := build/cache
 # 15 GB in 1K blocks, as reported by df -Pk
 MIN_FREE_KB  := 15728640
@@ -21,7 +22,7 @@ COMPOSE    := docker compose -p kubernetes-platform
 
 DOCKER_RUN := docker run --rm -e OFFLINE -v $(CURDIR):$(REPO) -w $(REPO)
 
-.PHONY: preflight fetch tools-image test ci-unit shell vendor lock-check build up down integration
+.PHONY: preflight fetch helm-image tools-image test ci-unit shell vendor lock-check build up down integration
 
 preflight:
 	docker system df
@@ -53,13 +54,20 @@ fetch:
 	done
 	cd $(CACHE) && sha256sum -c ../SHA256SUMS
 
-tools-image: fetch
+# Compiles helm and tiller from source; needs network access and disk headroom.
+helm-image: preflight fetch
+	@for attempt in 1 2 3; do \
+		docker build -t $(HELM_IMAGE) -f build/helm/Dockerfile build/ && exit 0; \
+		echo "helm-image: build failed (attempt $$attempt)" >&2; sleep 5; \
+	done; exit 1
+
+tools-image: fetch helm-image
 	@for attempt in 1 2 3; do \
 		docker build -t $(TOOLS_IMAGE) -f build/tools/Dockerfile build/ && exit 0; \
 		echo "tools-image: build failed (attempt $$attempt)" >&2; sleep 5; \
 	done; exit 1
 
-test: preflight fetch tools-image
+test: preflight fetch helm-image tools-image
 	$(DOCKER_RUN) $(TOOLS_IMAGE) make -f Makefile ci-unit
 
 # Runs inside the tools image.
@@ -84,8 +92,9 @@ lock-check:
 build: tools-image
 	$(DOCKER_RUN) $(TOOLS_IMAGE) go build -ldflags "-X main.version=$(VERSION)" -o bin/platform-app ./cmd/platform-app
 
-# Starts the Compose stack. The tools image is a local tag, so build it first.
-up: fetch tools-image
+# Starts the Compose stack. The helm and tools images are local tags, so
+# build them first, in that order.
+up: fetch helm-image tools-image
 	@for attempt in 1 2 3; do \
 		$(COMPOSE) up -d --build && exit 0; \
 		echo "up: compose up failed (attempt $$attempt)" >&2; sleep 5; \

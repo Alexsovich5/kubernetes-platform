@@ -41,18 +41,12 @@ teardown() {
 }
 
 @test "setup-cluster.sh exits 0 on two runs in a row" {
-  stub_bin="$BATS_TMPDIR/setup-cluster-helm-$$"
-  mkdir -p "$stub_bin"
-  # Helm is not built until later, so the helm stub stands in for it.
-  ln -sf "$BATS_TEST_DIRNAME/../unit/stubs/helm" "$stub_bin/helm"
-
-  PATH="$stub_bin:$PATH" SKIP_DOCKER_CHECK=1 HELM_HOST=unused:1 run scripts/setup-cluster.sh
+  SKIP_DOCKER_CHECK=1 HELM_HOST=unused:1 run scripts/setup-cluster.sh
   echo "$output"
   [ "$status" -eq 0 ]
 
-  PATH="$stub_bin:$PATH" SKIP_DOCKER_CHECK=1 HELM_HOST=unused:1 run scripts/setup-cluster.sh
+  SKIP_DOCKER_CHECK=1 HELM_HOST=unused:1 run scripts/setup-cluster.sh
   echo "$output"
-  rm -rf "$stub_bin"
   [ "$status" -eq 0 ]
 }
 

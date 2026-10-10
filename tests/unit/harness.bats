@@ -28,3 +28,14 @@
   [ "$status" -eq 0 ]
   [[ "$output" == *'GitVersion:"v1.2.6"'* ]]
 }
+
+@test "helm client is v2.0.0-alpha.2" {
+  run helm version
+  [ "$status" -eq 0 ]
+  [ "$output" = "v2.0.0-alpha.2" ]
+}
+
+@test "tiller binary is installed" {
+  run command -v tiller
+  [ "$status" -eq 0 ]
+}
